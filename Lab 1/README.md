@@ -198,6 +198,8 @@ wasn't clear.
 **Who were the other groups you kibitzed with? Add links to their project pages here.**
 **Summarize the feedback you got from your partners here.**
 
+Ani Hadagali (https://github.com/anihadagali7/Interactive-Lab-Hub/tree/anihadagali7-Aug26-Lab/Lab%201)
+
 ## Remix, Update, or Critique the Master
 
 Now that you understand your masterwork from the inside, respond to it. Do the

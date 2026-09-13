@@ -163,6 +163,10 @@ You can look in `image.py` for an example of how to display an image on the scre
 ### Set up the Display Clock Demo
 Work on `screen_clock.py`, try to show the time by filling in the while loop (at the bottom of the script where we noted "TODO" for you). You can use the code in `cli_clock.py` and `stats.py` to figure this out.
 
+**Completed**: `screen_clock.py` now clears the display each frame and draws the current date/time (`time.strftime("%m/%d/%Y %H:%M:%S")`) on the MiniPiTFT.
+
+**AI Usage**: Used GitHub Copilot Chat (WendyTA) to implement the clock-drawing loop in `screen_clock.py`, and to debug a `ModuleNotFoundError` (venv not activated) and a `GPIO busy` error (caused by `piscreen.service` holding the display pins) on 2026-09-13. See `WendyTA/logs/Lab2_ai_interaction_log.md` for details.
+
 ### How to Edit Scripts on Pi
 Option 1. One of the ways for you to edit scripts on Pi through terminal is using [`nano`](https://linuxize.com/post/how-to-use-nano-text-editor/) command. You can go into the `screen_clock.py` by typing the follow command line:
 ```

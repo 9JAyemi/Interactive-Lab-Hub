@@ -237,7 +237,7 @@ The stop summary shown after pressing `ctrl-c`, including the comparison against
 
 ## Make a short video of your modified barebones PiClock
 
-\*\*\***Take a video of your barely modified PiClock.**\*\*\*
+https://drive.google.com/drive/folders/1GmYLaZrdEWwjOQLoHJjSnJxvRuVAFE3t?usp=drive_link
 
 After you edit and work on the scripts for Lab 2, the files should be upload back to your own GitHub repo! You can push to your personal github repo by adding the files here, commiting and pushing.
 

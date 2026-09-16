@@ -70,6 +70,7 @@ LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "distance_cl
 STEPS_PER_KM = 1400
 KM_PER_MARATHON = 42
 MESSAGE_DURATION = 3  # seconds to keep a milestone message on screen
+RUN_DURATION_LIMIT = 24 * 60 * 60  # auto-stop after 24 real hours
 start_time = time.time()
 prev_total_km = 0
 prev_marathons = 0
@@ -143,6 +144,9 @@ try:
         # Display image.
         disp.image(image, rotation)
         time.sleep(1)
+
+        if elapsed_seconds >= RUN_DURATION_LIMIT:
+            raise KeyboardInterrupt  # 24 hours reached: stop and show the same summary as ctrl-c
 except KeyboardInterrupt:
     # Show a final summary on screen and in the terminal when the script is stopped
     try:

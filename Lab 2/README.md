@@ -231,6 +231,10 @@ Start small, pick just one element of your overall idea, just to show you have a
 
 <img src="IMG_3162.jpeg" height="300" />
 
+The stop summary shown after pressing `ctrl-c`, including the comparison against the previous session's total steps:
+
+<img src="IMG_3163.jpeg" height="300" />
+
 ## Make a short video of your modified barebones PiClock
 
 \*\*\***Take a video of your barely modified PiClock.**\*\*\*

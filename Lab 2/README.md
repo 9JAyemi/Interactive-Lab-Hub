@@ -165,6 +165,8 @@ Work on `screen_clock.py`, try to show the time by filling in the while loop (at
 
 **Completed**: `screen_clock.py` now clears the display each frame and draws the current date/time (`time.strftime("%m/%d/%Y %H:%M:%S")`) on the MiniPiTFT.
 
+<img src="IMG_3135.jpeg" height="300" />
+
 **AI Usage**: Used GitHub Copilot Chat (WendyTA) to implement the clock-drawing loop in `screen_clock.py`, and to debug a `ModuleNotFoundError` (venv not activated) and a `GPIO busy` error (caused by `piscreen.service` holding the display pins) on 2026-09-13. See `WendyTA/logs/Lab2_ai_interaction_log.md` for details.
 
 ### How to Edit Scripts on Pi
@@ -198,6 +200,10 @@ We strongly discourage literal digital or analog clock display: Be creative.
 
 ** Insert ideas, sketches, [Verplank diagrams](https://ccrma.stanford.edu/courses/250a-fall-2004/IDSketchbok.pdf)), storyboards for your ideas **
 
+[Verplank diagram](Untitled%20Notebook.pdf)
+
+[Storyboard](Untitled%20Notebook_2.pdf)
+
 
 
 **Put the names of the people you gave feedback to here. (Even better, add links to their repos here!)**
@@ -220,6 +226,10 @@ We strongly discourage literal digital or analog clock display: Be creative.
 Start small, pick just one element of your overall idea, just to show you have a handle on the code and components.
 
 \*\*\***Put a copy of your code in your Lab 2 Github repo.**\*\*\*
+
+**Completed**: Added `distance_clock.py`, a modified version of `screen_clock.py` that reinterprets time as distance: 1 second = 1 step, 1,400 steps = 1 km, and 42 km = 1 marathon lap. Milestone messages (randomized) and a live pace readout ("Speeding up!"/"Slowing down!" based on how long each km takes) are shown on screen. Pressing `ctrl-c` stops the clock and shows/prints a summary (total steps, Mar/Km/Step breakdown, elapsed time), which is also logged to `distance_clock_log.json` and compared against the previous session's totals.
+
+<img src="IMG_3162.jpeg" height="300" />
 
 ## Make a short video of your modified barebones PiClock
 
@@ -245,6 +255,8 @@ Do take advantage of having done the previous iteration to refine and simplify y
 \*\*\***Put a copy of your code in your Lab 2 Github repo.**\*\*\*
 
 \*\*\***Take a video of your PiClock.**\*\*\*
+
+**AI Usage**: Used GitHub Copilot Chat (WendyTA) on 2026-09-16 to iteratively build `distance_clock.py` from `screen_clock.py`: converting seconds/minutes/hours into steps/km/marathons, adding milestone messages, pace tracking, a Ctrl+C stop summary, and day-to-day session comparison logging. Also used it to debug a `ModuleNotFoundError` (needed to activate `/home/pi/venv`) and an `OSError: [Errno 121] Remote I/O error` (a since-reverted Qwiic Button integration that wasn't actually wired up).
 
 
 As always, make sure you document contributions and ideas from others (and AI) explicitly in your writeup.

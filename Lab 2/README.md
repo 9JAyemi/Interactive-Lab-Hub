@@ -1,5 +1,5 @@
 # Interactive Prototyping: The Clock of Pi
-**NAMES OF COLLABORATORS HERE**
+Abiola Bolaji (ab3394)
 
 Does it feel like time is moving strangely during this semester?
 
@@ -220,6 +220,8 @@ I really like the idea of using distance to calculate time. It’s really creati
 
 Jonathan Tumalle (https://github.com/jontumalle/Interactive-Lab-Hub/blob/Lab2a/Lab%202/README.md)
 I like the idea of changing time to distance traveled over time. One thing that might be hard to understand for a user just looking at the screen is how many steps will make a kilometer. Similar to a clock shows you when a minute/hour is about to end it may be cool to have different visual meters that show when you’re about to complete a kilometer and a marathon.
+Pallavi Srinivas (https://github.com/pallavi-srinivas/Interactive-Lab-Hub/tree/Fall2026/Lab%202)
+This is a great idea because it will incentivize people to get more active and will push people to increase their time. People would be able to set new records for themselves and ensure they are physically taking care of themselves. Make sure to add information about km traveled (theoretically this would be a wearable device but with the tools we have we cannot do that!)
 
 ## Update your Lab Hub
 
@@ -229,7 +231,6 @@ I like the idea of changing time to distance traveled over time. One thing that 
 
 Start small, pick just one element of your overall idea, just to show you have a handle on the code and components.
 
-\*\*\***Put a copy of your code in your Lab 2 Github repo.**\*\*\*
 
 **Completed**: Added `distance_clock.py`, a modified version of `screen_clock.py` that reinterprets time as distance: 1 second = 1 step, 1,400 steps = 1 km, and 42 km = 1 marathon lap. Milestone messages (randomized) and a live pace readout ("Speeding up!"/"Slowing down!" based on how long each km takes) are shown on screen. Pressing `ctrl-c` stops the clock and shows/prints a summary (total steps, Mar/Km/Step breakdown, elapsed time), which is also logged to `distance_clock_log.json` and compared against the previous session's totals.
 

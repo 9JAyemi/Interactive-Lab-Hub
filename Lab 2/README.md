@@ -239,10 +239,6 @@ The stop summary shown after pressing `ctrl-c`, including the comparison against
 
 <img src="IMG_3163.jpeg" height="300" />
 
-## Make a short video of your modified barebones PiClock
-
-[Videos](https://drive.google.com/drive/folders/1GmYLaZrdEWwjOQLoHJjSnJxvRuVAFE3t?usp=drive_link)
-
 After you edit and work on the scripts for Lab 2, the files should be upload back to your own GitHub repo! You can push to your personal github repo by adding the files here, commiting and pushing.
 
 ```
@@ -260,9 +256,7 @@ Do take advantage of having done the previous iteration to refine and simplify y
 ** Insert any updates ideas, sketches, [Verplank diagrams](https://ccrma.stanford.edu/courses/250a-fall-2004/IDSketchbok.pdf))!, storyboards for your ideas **
 
 
-\*\*\***Put a copy of your code in your Lab 2 Github repo.**\*\*\*
-
-\*\*\***Take a video of your PiClock.**\*\*\*
+[Videos](https://drive.google.com/drive/folders/1GmYLaZrdEWwjOQLoHJjSnJxvRuVAFE3t?usp=drive_link)
 
 **AI Usage**: Used GitHub Copilot Chat (WendyTA) on 2026-09-16 to iteratively build `distance_clock.py` from `screen_clock.py`: converting seconds/minutes/hours into steps/km/marathons, adding milestone messages, pace tracking, a Ctrl+C stop summary, and day-to-day session comparison logging. Also used it to debug a `ModuleNotFoundError` (needed to activate `/home/pi/venv`) and an `OSError: [Errno 121] Remote I/O error` (a since-reverted Qwiic Button integration that wasn't actually wired up).
 

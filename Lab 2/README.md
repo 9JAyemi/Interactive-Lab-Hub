@@ -215,7 +215,11 @@ We strongly discourage literal digital or analog clock display: Be creative.
 1. Pick up remaining parts for kit on Wednesday lab class. Check the updated [parts list inventory](partslist.md) and let the TA know if there is any part missing.
 
 2. Look at and give feedback on the Part E. for at least 3 other people in the class and get 3 people to comment on your Part E!)
-**Put the feedback for your ideas here.**
+Ani Hadagali (https://github.com/anihadagali7/Interactive-Lab-Hub/blob/anihadagali7-Aug26-Lab/Lab%202/README.md):
+I really like the idea of using distance to calculate time. It’s really creative because it might get people to be more healthy and get active. But i’m unsure when the clock would ‘reset’, is it after each activity? It might be nice to let people set goals and let them know how close they are to achieving it.
+
+Jonathan Tumalle (https://github.com/jontumalle/Interactive-Lab-Hub/blob/Lab2a/Lab%202/README.md)
+I like the idea of changing time to distance traveled over time. One thing that might be hard to understand for a user just looking at the screen is how many steps will make a kilometer. Similar to a clock shows you when a minute/hour is about to end it may be cool to have different visual meters that show when you’re about to complete a kilometer and a marathon.
 
 ## Update your Lab Hub
 

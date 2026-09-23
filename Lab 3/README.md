@@ -12,7 +12,7 @@ A note on what you are building with. Speech interfaces are usually taught as tw
 
 ## Prep for Part 1: Get the Latest Content and Pick up Additional Parts
 
-Please check instructions in [prep.md](prep.md) and complete the setup before class on Wednesday.
+Please check instructions in [prep.md](prep.md) and complete the setup.
 
 ### Pick up Web Camera If You Don't Have One
 

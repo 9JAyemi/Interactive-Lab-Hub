@@ -187,8 +187,10 @@ Your script should include the pauses. Where does your device wait, and for how 
 
 Find a partner, and *without sharing the script with your partner* try out the dialogue you've designed, where you (as the device designer) act as the device you are designing. Please record this interaction (for example, using Zoom's record feature).
 
-\*\***Describe if the dialogue seemed different than what you imagined when it was acted out, and how.**\*\*
+The dialog seemed similar to how I imagined it in my head before being acted out. I would say it was difficult for me to be the device and know if I should wait to hear longer strings of words vs respond quicker because the user did not use as much words. The link to the recordings is here (https://drive.google.com/drive/folders/1i-nW80Kwo5QQnPVkidskgqXqI4jXtov1?usp=drive_link)
 
+Feedback:
+The interactive oven idea is super unique and fun! In addition to listing ingredients and checking how much time is left, I think it'd be cool to add a temperature check feature or commands like preheat, light on/off, etc.
 
 ---
 

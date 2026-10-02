@@ -171,13 +171,122 @@ class Speaker:
             sd.wait()
 
 
+class OvenDisplay:
+    """Draw a simple oven-window scene on the Pi's ST7789 screen."""
+
+    def __init__(self) -> None:
+        import board
+        import digitalio
+        from PIL import Image, ImageDraw, ImageFont
+        import adafruit_rgb_display.st7789 as st7789
+
+        self.Image = Image
+        self.ImageDraw = ImageDraw
+        self.ImageFont = ImageFont
+        cs_pin = digitalio.DigitalInOut(board.D5)
+        dc_pin = digitalio.DigitalInOut(board.D25)
+        self.backlight = digitalio.DigitalInOut(board.D22)
+        self.backlight.switch_to_output(value=True)
+        spi = board.SPI()
+        self.display = st7789.ST7789(
+            spi,
+            cs=cs_pin,
+            dc=dc_pin,
+            rst=None,
+            baudrate=64_000_000,
+            width=135,
+            height=240,
+            x_offset=53,
+            y_offset=40,
+        )
+        self.rotation = 90
+        self.width = self.display.height
+        self.height = self.display.width
+        self.small_font = self._font(12)
+        self.title_font = self._font(16)
+        self.draw_scene("READY TO BAKE", "cornbread", 0.08)
+
+    @staticmethod
+    def _font(size: int):
+        from PIL import ImageFont
+
+        try:
+            return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size)
+        except OSError:
+            return ImageFont.load_default()
+
+    def draw_scene(self, status: str, food: str, progress: float) -> None:
+        image = self.Image.new("RGB", (self.width, self.height), (20, 26, 38))
+        draw = self.ImageDraw.Draw(image)
+
+        # Compact oven front and glowing window.
+        draw.rounded_rectangle((8, 8, 231, 127), radius=12, fill=(49, 57, 69), outline=(142, 154, 166), width=2)
+        draw.text((17, 12), "OVEN", font=self.title_font, fill=(245, 245, 240))
+        draw.text((114, 16), status[:18], font=self.small_font, fill=(255, 196, 92))
+        draw.rounded_rectangle((43, 37, 197, 108), radius=9, fill=(18, 34, 46), outline=(103, 130, 145), width=3)
+
+        # A cornbread loaf grows upward and browns as the timer advances.
+        progress = max(0.0, min(progress, 1.0))
+        cake_height = 9 + round(progress * 34)
+        cake_width = 35 + round(progress * 37)
+        center_x = 120
+        pan_top = 91
+        pan_left = center_x - 48
+        pan_right = center_x + 48
+        draw.rounded_rectangle((pan_left, pan_top, pan_right, 101), radius=3, fill=(126, 139, 151))
+        cake_top = pan_top - cake_height
+        cake_left = center_x - cake_width // 2
+        cake_right = center_x + cake_width // 2
+        gold = round(222 - progress * 48)
+        draw.rounded_rectangle(
+            (cake_left, cake_top, cake_right, pan_top + 1),
+            radius=max(3, min(10, cake_height // 3)),
+            fill=(gold, round(gold * 0.59), 58),
+            outline=(255, 222, 138),
+            width=2,
+        )
+        # A few browned surface marks make the growth/cooking state legible.
+        for mark_x in (center_x - 13, center_x, center_x + 13):
+            if mark_x < cake_right - 4 and mark_x > cake_left + 4:
+                draw.ellipse((mark_x - 2, cake_top + 5, mark_x + 2, cake_top + 8), fill=(143, 73, 34))
+
+        draw.text((14, 108), food[:22].title(), font=self.small_font, fill=(235, 239, 242))
+        self.display.image(image, self.rotation)
+
+    def show_timer(self, food: str, progress: float, remaining: int) -> None:
+        minutes, seconds = divmod(remaining, 60)
+        self.draw_scene(f"{minutes:02d}:{seconds:02d} LEFT", food, progress)
+
+    def show_finished(self, food: str) -> None:
+        self.draw_scene("DONE - CHECK", food, 1.0)
+
+
 class OvenAssistant:
     """Small offline dialogue policy with one active countdown timer."""
 
     def __init__(self) -> None:
         self.selected_recipe: str | None = None
         self.timer_deadline: float | None = None
+        self.timer_started_at: float | None = None
+        self.timer_duration_seconds: int | None = None
         self.timer_label = "cooking"
+
+    def start_timer(self, duration: int, label: str | None = None) -> None:
+        self.timer_started_at = time.monotonic()
+        self.timer_duration_seconds = duration
+        self.timer_deadline = self.timer_started_at + duration
+        self.timer_label = label or self.selected_recipe or "cooking"
+
+    def cancel_timer(self) -> None:
+        self.timer_deadline = None
+        self.timer_started_at = None
+        self.timer_duration_seconds = None
+
+    def timer_progress(self) -> float:
+        if self.timer_deadline is None or self.timer_started_at is None or not self.timer_duration_seconds:
+            return 0.0
+        elapsed = time.monotonic() - self.timer_started_at
+        return min(1.0, max(0.0, elapsed / self.timer_duration_seconds))
 
     @staticmethod
     def find_recipe(text: str) -> str | None:
@@ -189,7 +298,7 @@ class OvenAssistant:
     def finish_timer_if_due(self) -> str | None:
         if self.timer_deadline is not None and time.monotonic() >= self.timer_deadline:
             label = self.timer_label
-            self.timer_deadline = None
+            self.cancel_timer()
             return label
         return None
 
@@ -205,23 +314,21 @@ class OvenAssistant:
         if "cancel timer" in text or "stop timer" in text:
             if self.timer_deadline is None:
                 return "There isn't an active timer to cancel."
-            self.timer_deadline = None
+            self.cancel_timer()
             return "Timer cancelled. Please keep an eye on the food yourself."
 
         duration = parse_duration(text)
         if "timer" in text and duration is not None:
             if duration > 24 * 60 * 60:
                 return "That timer is longer than one day. Please choose a shorter duration."
-            self.timer_deadline = time.monotonic() + duration
-            self.timer_label = self.selected_recipe or "cooking"
+            self.start_timer(duration)
             return f"Timer started for {format_duration(duration)}."
 
         if "timer" in text and any(word in text.split() for word in ("start", "set", "begin")):
             recipe = RECIPES.get(self.selected_recipe) if self.selected_recipe else None
             if recipe and recipe["minutes"]:
                 duration = recipe["minutes"] * 60
-                self.timer_deadline = time.monotonic() + duration
-                self.timer_label = self.selected_recipe
+                self.start_timer(duration)
                 return f"Starting a 20-minute cornbread timer now. Please check the food directly for doneness."
             return "How many minutes should I set the timer for?"
 
@@ -283,8 +390,7 @@ class OvenAssistant:
             recipe = RECIPES.get(recipe_name) if recipe_name else None
             if recipe and recipe["minutes"]:
                 duration = recipe["minutes"] * 60
-                self.timer_deadline = time.monotonic() + duration
-                self.timer_label = recipe_name
+                self.start_timer(duration, recipe_name)
                 return f"Starting a 20-minute cornbread timer now. Please check the food directly for doneness."
             return "I don't have a saved cooking time for that. How many minutes should I set the timer for?"
 
@@ -307,6 +413,8 @@ def main() -> None:
     parser.add_argument("--voice", type=Path, default=DEFAULT_VOICE)
     parser.add_argument("--min-silence", type=float, default=0.6,
                         help="silence duration that ends a turn (default: 0.6 seconds)")
+    parser.add_argument("--no-screen", action="store_true",
+                        help="run without initializing the ST7789 PiTFT display")
     args = parser.parse_args()
 
     for path, label in ((args.vad_model, "VAD model"), (args.voice, "Piper voice")):
@@ -317,6 +425,12 @@ def main() -> None:
     recognizer = WhisperModel(args.model, device="cpu", compute_type="int8")
     speaker = Speaker(args.voice)
     assistant = OvenAssistant()
+    display = None
+    if not args.no_screen:
+        try:
+            display = OvenDisplay()
+        except Exception as exc:
+            print(f"Screen unavailable ({exc}); continuing with audio only.", file=sys.stderr)
 
     config = sherpa_onnx.VadModelConfig()
     config.silero_vad.model = str(args.vad_model)
@@ -326,6 +440,7 @@ def main() -> None:
     window = config.silero_vad.window_size
     samples_per_read = int(0.1 * SAMPLE_RATE)
     buffer = np.empty(0, dtype=np.float32)
+    last_display_update = 0.0
 
     speaker.say(
         "Hello, I'm your oven helper. Ask for saved recipes, cooking times, or a timer. "
@@ -355,8 +470,16 @@ def main() -> None:
                 if finished:
                     message = f"Your {finished} timer is finished. Please check the food directly."
                     print(f"  oven: {message}")
+                    if display:
+                        display.show_finished(finished)
                     speak_without_listening(message)
                     buffer = np.empty(0, dtype=np.float32)
+
+                now = time.monotonic()
+                if display and assistant.timer_deadline is not None and now - last_display_update >= 0.5:
+                    remaining = max(0, math.ceil(assistant.timer_deadline - time.monotonic()))
+                    display.show_timer(assistant.timer_label, assistant.timer_progress(), remaining)
+                    last_display_update = now
 
                 chunk, _ = stream.read(samples_per_read)
                 buffer = np.concatenate([buffer, chunk.reshape(-1)])
@@ -375,6 +498,8 @@ def main() -> None:
 
                     reply = assistant.reply(heard)
                     print(f"  heard: {heard}\n  oven:  {reply}\n", flush=True)
+                    if display and "cancelled" in reply.lower():
+                        display.draw_scene("TIMER CANCELLED", assistant.timer_label, 0.08)
                     speak_without_listening(reply)
                     buffer = np.empty(0, dtype=np.float32)
                     if any(word in re.sub(r"[^a-z ]", " ", heard.lower()).split()

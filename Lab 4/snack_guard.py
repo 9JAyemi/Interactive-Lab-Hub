@@ -5,15 +5,16 @@ import pi_servo_hat
 import qwiic_oled
 import qwiic_proximity
 
-# --- Proximity range that counts as "your snack" (fill these in later) ---
-# Raw readings from the VCNL4040: bigger number = closer object.
-# Run qwiic_distance.py to see what values your hand/object produces.
-SNACK_MIN = 100
-SNACK_MAX = 300
+# --- Proximity range that counts as "your snack" ---
+# Raw readings from the VCNL4040: bigger number = closer/more stuff in front.
+# 1-10  -> one hand: servo opens, "Hi Enjoy Your Snack!"
+# >10   -> more than one hand: "THIS IS NOT YOUR SNACK!"
+SNACK_MIN = 1
+SNACK_MAX = 10
 
 # Readings below this mean nothing is in front of the sensor, so the screen
-# is cleared instead of showing the warning. Set to 0 to always show it.
-IDLE_THRESHOLD = 10
+# is cleared instead of showing the warning.
+IDLE_THRESHOLD = 1
 
 # --- Servo ---
 SERVO_CH = 0
@@ -23,16 +24,8 @@ HOLD_SECONDS = 5
 # Speed of the turn: the servo steps 1 degree, then waits this long.
 # 0.02 -> 90 degrees in ~1.8 s. Bigger = slower.
 STEP_DELAY = 0.02
-
-POLL_SECONDS = 0.2
-
-
-def sweep(servo, start, end):
-    step = 1 if end > start else -1
-    for angle in range(start, end + step, step):
-        servo.move_servo_position(SERVO_CH, angle)
-        time.sleep(STEP_DELAY)
-
+# Separate speed for coming back down to rest. Bigger = slower.
+RETURN_STEP_DELAY = 0.05
 
 def show(oled, lines):
     # print() can't handle "\n" in this library, so place each line manually
@@ -62,28 +55,61 @@ def main():
     servo.restart()
     servo.move_servo_position(SERVO_CH, REST_ANGLE)
 
-    last_state = None
+    angle = REST_ANGLE
+    target = REST_ANGLE
+    close_at = None  # when the 5 s hold ends, once fully open
+    last_screen = None
+    last_value = None
+
+    # Each pass: read the sensor, then move the servo at most 1 degree.
+    # The sensor is never ignored, so a second hand can close it mid-move.
     while True:
         value = prox.get_proximity()
-        print(f"Proximity: {value}")
+        if value != last_value:
+            print(f"Proximity: {value}")
+            last_value = value
 
-        if SNACK_MIN <= value <= SNACK_MAX:
-            show(oled, ["Hi Enjoy Your Snack!"])
-            sweep(servo, REST_ANGLE, OPEN_ANGLE)
-            time.sleep(HOLD_SECONDS)
-            sweep(servo, OPEN_ANGLE, REST_ANGLE)
-            time.sleep(0.5)  # let the servo settle before reading again
-            last_state = "snack"
-        elif value < IDLE_THRESHOLD:
-            if last_state != "idle":
-                show(oled, [])
-                last_state = "idle"
+        if value > SNACK_MAX:
+            # More than one hand: close right away, even while opening/holding
+            target = REST_ANGLE
+            close_at = None
+            screen = "wrong"
+        elif value >= SNACK_MIN and target == REST_ANGLE and angle == REST_ANGLE:
+            # One hand while closed: start opening
+            target = OPEN_ANGLE
+            close_at = None
+            screen = "snack"
+        elif target == OPEN_ANGLE:
+            # Still opening or holding; hand leaving doesn't close it early
+            screen = "snack"
+        elif value < IDLE_THRESHOLD and angle == REST_ANGLE:
+            screen = "idle"
         else:
-            if last_state != "wrong":
-                show(oled, ["THIS IS NOT", "YOUR SNACK!"])
-                last_state = "wrong"
+            screen = last_screen
 
-        time.sleep(POLL_SECONDS)
+        # Start the 5 s hold once fully open, then close when it runs out
+        if target == OPEN_ANGLE and angle == OPEN_ANGLE:
+            if close_at is None:
+                close_at = time.monotonic() + HOLD_SECONDS
+            elif time.monotonic() >= close_at:
+                target = REST_ANGLE
+                close_at = None
+
+        if screen != last_screen:
+            if screen == "snack":
+                show(oled, ["Hi Enjoy Your Snack!"])
+            elif screen == "wrong":
+                show(oled, ["THIS IS NOT", "YOUR SNACK!"])
+            else:
+                show(oled, [])
+            last_screen = screen
+
+        if angle != target:
+            angle += 1 if target > angle else -1
+            servo.move_servo_position(SERVO_CH, angle)
+            time.sleep(STEP_DELAY if target == OPEN_ANGLE else RETURN_STEP_DELAY)
+        else:
+            time.sleep(STEP_DELAY)
 
 
 if __name__ == "__main__":

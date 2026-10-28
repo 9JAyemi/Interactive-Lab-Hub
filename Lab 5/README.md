@@ -285,6 +285,18 @@ The hand-off: the person tells the device what to watch tonight, and the device 
 
 \*\*\***Describe the bedtime interaction and include a short video of someone handing the night over to the device.**\*\*\*
 
+**My bedtime hand-off: the sleep watcher ([sleep_watch.py](sleep_watch.py)).** Before bed the person asks the Pi to watch their sleep. The Pi asks out loud (espeak-ng), *"What would you like me to watch tonight?"*, and the person types or says their question, for example *"Do I toss and turn more when the room is noisier?"* (pressing Enter uses that question as the default). The Pi answers, *"Okay. I will count your tossing and turning and listen to the room... Good night,"* then waits a settling period so getting into bed is not counted.
+
+```
+(.venv) pi@raspberrypi:~/Interactive-Lab-Hub/Lab 5 $ tmux new -s night
+(.venv) pi@raspberrypi:~/Interactive-Lab-Hub/Lab 5 $ python sleep_watch.py --until 07:00     # type the question
+(.venv) pi@raspberrypi:~/Interactive-Lab-Hub/Lab 5 $ python sleep_watch.py --voice           # or say it (needs faster-whisper from Lab 3)
+(.venv) pi@raspberrypi:~/Interactive-Lab-Hub/Lab 5 $ python sleep_watch.py --settle 300      # 5 minutes to fall asleep before counting (default 120 s)
+(.venv) pi@raspberrypi:~/Interactive-Lab-Hub/Lab 5 $ python sleep_watch.py --quiet           # no spoken acknowledgement
+```
+
+Detach from tmux with `Ctrl-b` then `d`; the night keeps running after the ssh session closes. Without `--voice` the script falls back to typing, so it still works if faster-whisper is not installed in the Lab 5 venv.
+
 ## Part H. 
 ### Incorporate the observant system during sleep
 
@@ -299,6 +311,29 @@ Fake a night first: run it for thirty seconds while you walk around, stop it, an
 
 \*\*\***Run the system for at least one real night. Include the log (or an excerpt) and a few sentences on what broke or surprised you.**\*\*\*
 
+**My night shift.** `sleep_watch.py` replaces `overnight.py` for my interaction. It uses the webcam and the microphone together and takes one look every 5 seconds (`--interval`):
+
+* **Movement (tossing and turning):** YOLO (the `model` from `yolo_to_qwen.py`, people only, confidence 0.3 because a sleeper is half hidden) finds the person. The frame is compared with the previous look inside the person's box, padded by 15%, or the whole frame if YOLO cannot find them under the blanket. If more than `--motion` (default 0.04, i.e. 4%) of those pixels changed, or the box jumped sideways or changed shape (lying on the back vs. the side), that look counts as a toss. Tosses closer than `--cooldown` seconds (default 30) count once. If nearly the whole frame changes (a lamp switched on), the look is marked `light` and not counted.
+* **Sound level:** the microphone is read continuously in 0.1 s blocks and converted to loudness in dBFS. Each look records the average (`db`) and the peak (`peak`) since the previous look. dBFS is relative to the mic, not a calibrated sound meter: about -60 is a silent room, about -30 is talking nearby, and 0 is the loudest the mic can record. If no mic is found the night still runs and sound is logged as `null`.
+* **Privacy:** no photos are saved, only numbers.
+
+Everything goes into `sleep_log.jsonl`, one JSON object per look (a new night overwrites the previous log):
+
+```
+{"t": "2026-10-27T23:00:00", "start": true, "request": "Do I toss and turn more when the room is noisier?", "interval": 5}
+{"t": "2026-10-27T23:03:15", "person": true, "motion": 0.071, "toss": true, "db": -57.8, "peak": -38.2}
+{"t": "2026-10-27T23:03:20", "person": true, "motion": 0.009, "toss": false, "db": -58.4, "peak": -55.1}
+```
+
+Fake a night first: run `python sleep_watch.py --settle 5 --verbose`, toss around in view of the camera, clap a few times, then press Ctrl-C and check the report. Tuning tips:
+
+* If breathing or camera noise is counted as tossing, raise `--motion` (e.g. `--motion 0.08`); if real turns are missed, lower it.
+* A completely dark room makes YOLO and the motion detection unreliable. A dim night light helps.
+* Point the camera at the bed from the side or the foot, far enough away that the whole body is in the frame.
+* Check that the webcam and the mic show up first: `ls /dev/video0` and `arecord -l`.
+
+*Log excerpt and what broke or surprised me: (to fill in after the real night)*
+
 ## Part I. 
 ### Design the interaction when awake
 
@@ -309,6 +344,23 @@ The reveal. The night produced a log; the morning turns it into something a half
 ```
 
 Make it yours: show the report on the Mini PiTFT, read it aloud with Piper from Lab 3, plot the night as a timeline, or ask for JSON (`--json`, Part D) and move a servo. Whatever you pick, make sure it is honest about a night in which nothing happened.
+
+**My morning reveal.** When the night ends (Ctrl-C in the tmux window, or automatically at the `--until` time), `sleep_watch.py` gives the report straight away. To see it again, or to report on another log:
+
+```
+(.venv) pi@raspberrypi:~/Interactive-Lab-Hub/Lab 5 $ tmux attach -t night                     # get back to the night window, then Ctrl-C
+(.venv) pi@raspberrypi:~/Interactive-Lab-Hub/Lab 5 $ python sleep_watch.py --morning          # report on the last sleep_log.jsonl
+(.venv) pi@raspberrypi:~/Interactive-Lab-Hub/Lab 5 $ python sleep_watch.py --morning --say    # and read it aloud
+(.venv) pi@raspberrypi:~/Interactive-Lab-Hub/Lab 5 $ python sleep_watch.py --morning --log fake.jsonl
+```
+
+The arithmetic is done in Python, not by Qwen, because a 0.8B model is bad at maths. The script prints all the facts first, then asks Qwen (`qwen3.5:0.8b`, change with `--model`) to turn them into a report of at most four sentences:
+
+* **Movement:** total tosses, tosses per hour, tosses in each hour of the night, and how much of the night the person was seen in bed.
+* **Sound:** the night's average loudness (very quiet / quiet / moderate / loud), the quiet baseline (the 20th percentile), the loudest moment and the quietest hour.
+* **Noise vs. movement:** a look counts as *noisy* when its peak is more than `--noisy-margin` dB (default 15) above the quiet baseline. The script compares how often the person tossed in noisy vs. quiet looks, counts the tosses that came within one minute after a noise, and computes the correlation between loudness and movement over 10-minute bins. From that it states a verdict: tossed MORE / LESS / about the SAME when it was noisy, or "not enough data to compare" (fewer than 3 tosses or no noisy moments).
+
+It is honest about empty nights: if nothing was logged, or the camera never saw anyone in bed, it says so and does not ask Qwen. Qwen can still add small invented details (e.g. a time of day), so the printed numbers are the ground truth and the spoken report is the friendly version.
 
 ## Final documentation
 

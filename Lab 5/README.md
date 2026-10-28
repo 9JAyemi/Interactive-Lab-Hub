@@ -272,11 +272,15 @@ Use storyboards and/or [Verplank diagrams](https://ccrma.stanford.edu/courses/25
 
 1. Look at and give feedback on the Part F storyboards.
    **Put the feedback for your ideas here.**
+
+   **Nishant Ray (nr487@cornell.edu):** "I like the idea of checking how someone is sleeping or if they move around during their sleep. It seems useful and would be something that I would actually use. I think one requirement from the README instructions say to not just have a camera pointing at the bed. Maybe there could be another form of interaction to see if they wake up during their sleep. Perhaps with any of the other sensors we received?"
 2. [Update your Lab Hub](prep.md#get-the-latest-content) to get the latest content for Part 2.
 3. Decide where the device will spend the night and who else lives there. Get their OK before the first run.
 4. Revise your storyboard with the feedback and with what you learned in Part E about where the pipeline breaks.
 
 \*\*\***Post your revised storyboard here.**\*\*\*
+
+**Revision from the feedback.** Nishant pointed out that Part 2 asks us not to just point a camera at the bed, and suggested using one of the other sensors to tell when the sleeper wakes or moves. In response, the revised design adds a **motion sensor under the bed** (from the Lab 4 sensor kit). It feels the mattress move when the person tosses and turns, so movement can be detected without relying only on the camera, and it keeps working in the dark, when the webcam struggles. The camera stays as a second signal, and it saves no images, only numbers. *Status: planned. The current `sleep_watch.py` still detects movement with the camera only; the sensor is the next step.*
 
 ## Part G. 
 ### Design the interaction before bed
@@ -295,7 +299,17 @@ The hand-off: the person tells the device what to watch tonight, and the device 
 (.venv) pi@raspberrypi:~/Interactive-Lab-Hub/Lab 5 $ python sleep_watch.py --quiet           # no spoken acknowledgement
 ```
 
-Detach from tmux with `Ctrl-b` then `d`; the night keeps running after the ssh session closes. Without `--voice` the script falls back to typing, so it still works if faster-whisper is not installed in the Lab 5 venv.
+The Pi waits **2 minutes** after the hand-off before it starts counting (a countdown prints every 30 s), so getting into bed is not counted as tossing.
+
+**The voice** is Piper from Lab 3 with `en_GB-jenny_dioco-medium`, a British English woman's voice. Switch to any other downloaded Piper voice by name with `--tts`, for example `--tts en_GB-cori-medium` (another British woman) or `--tts en_US-amy-medium` (American). The voice is downloaded once into `Lab 3/voices`:
+
+```
+(.venv) pi@raspberrypi:~/Interactive-Lab-Hub/Lab 3 $ python -m piper.download_voices en_GB-jenny_dioco-medium --data-dir voices
+```
+
+If the voice file is missing, the script falls back to espeak-ng.
+
+Detach from tmux with `Ctrl-b` then `d`; the night keeps running after the ssh session closes. With `--voice` the Pi listens for up to 15 seconds and stops early once you have spoken and paused for 1.5 seconds (change the limit with `--listen 30`). Without `--voice` the script falls back to typing, so it still works if faster-whisper is not installed in the Lab 5 venv.
 
 ## Part H. 
 ### Incorporate the observant system during sleep
@@ -357,8 +371,17 @@ Make it yours: show the report on the Mini PiTFT, read it aloud with Piper from 
 The arithmetic is done in Python, not by Qwen, because a 0.8B model is bad at maths. The script prints all the facts first, then asks Qwen (`qwen3.5:0.8b`, change with `--model`) to turn them into a report of at most four sentences:
 
 * **Movement:** total tosses, tosses per hour, tosses in each hour of the night, and how much of the night the person was seen in bed.
-* **Sound:** the night's average loudness (very quiet / quiet / moderate / loud), the quiet baseline (the 20th percentile), the loudest moment and the quietest hour.
+* **Sound:** when the room was noisiest and the quietest 10 minutes of the night. The report gives times, not decibel numbers; the dB values are only in the printout and the graph.
 * **Noise vs. movement:** a look counts as *noisy* when its peak is more than `--noisy-margin` dB (default 15) above the quiet baseline. The script compares how often the person tossed in noisy vs. quiet looks, counts the tosses that came within one minute after a noise, and computes the correlation between loudness and movement over 10-minute bins. From that it states a verdict: tossed MORE / LESS / about the SAME when it was noisy, or "not enough data to compare" (fewer than 3 tosses or no noisy moments).
+
+**The graph.** Every morning report also saves a picture of the night next to the log, `sleep_YYYYMMDD-HHMM.png` (the date and time the night started). Movement and noise are drawn as two overlapping lines on one chart, so you can see whether they spike together:
+
+* **Movement** (blue): how much of the picture changed (the biggest change per minute; per look for short test nights), with a dot for each counted toss.
+* **Noise** (orange): the loudest sound each minute, with a dashed line for the noisy threshold.
+* The two lines have different units (% of the picture vs. dB), so each one is scaled to its own range for the night: the bottom of the chart is that line's lowest point and the top its highest. The real ranges are in the legend.
+* The **three moments with the most movement** are shaded and labelled with their time and how loud the room was then.
+
+Open it over VNC, or copy it to your laptop with `scp pi@raspberrypi:"~/Interactive-Lab-Hub/Lab\ 5/sleep_*.png" .`
 
 It is honest about empty nights: if nothing was logged, or the camera never saw anyone in bed, it says so and does not ask Qwen. Qwen can still add small invented details (e.g. a time of day), so the printed numbers are the ground truth and the spoken report is the friendly version.
 

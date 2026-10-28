@@ -1,0 +1,30 @@
+{"t": "2026-10-28T19:13:18", "start": true, "request": "Hi, are you able to watch me as I sleep? I'm trying to see how many times I toss in turn for tonight.", "interval": 5}
+{"t": "2026-10-28T19:13:26", "person": true, "motion": 0.0, "toss": false, "db": -30.5, "peak": -25.5}
+{"t": "2026-10-28T19:13:31", "person": true, "motion": 0.783, "toss": false, "db": -30.4, "peak": -27.2, "light": true}
+{"t": "2026-10-28T19:13:36", "person": true, "motion": 0.15, "toss": true, "db": -25.8, "peak": -18.3}
+{"t": "2026-10-28T19:13:41", "person": true, "motion": 0.32, "toss": false, "db": -29.4, "peak": -26.6}
+{"t": "2026-10-28T19:13:46", "person": true, "motion": 0.274, "toss": false, "db": -29.0, "peak": -25.3}
+{"t": "2026-10-28T19:13:51", "person": true, "motion": 0.467, "toss": false, "db": -26.5, "peak": -21.9}
+{"t": "2026-10-28T19:13:57", "person": true, "motion": 0.351, "toss": false, "db": -27.0, "peak": -24.1}
+{"t": "2026-10-28T19:14:02", "person": true, "motion": 0.374, "toss": false, "db": -28.1, "peak": -25.4}
+{"t": "2026-10-28T19:14:07", "person": true, "motion": 0.51, "toss": true, "db": -27.0, "peak": -21.8}
+{"t": "2026-10-28T19:14:12", "person": true, "motion": 0.176, "toss": false, "db": -28.9, "peak": -26.4}
+{"t": "2026-10-28T19:14:17", "person": true, "motion": 0.438, "toss": false, "db": -27.0, "peak": -22.2}
+{"t": "2026-10-28T19:14:23", "person": true, "motion": 0.179, "toss": false, "db": -30.1, "peak": -27.8}
+{"t": "2026-10-28T19:14:28", "person": true, "motion": 0.237, "toss": false, "db": -27.4, "peak": -21.5}
+{"t": "2026-10-28T19:14:33", "person": true, "motion": 0.262, "toss": false, "db": -23.4, "peak": -11.0}
+{"t": "2026-10-28T19:14:38", "person": true, "motion": 0.246, "toss": true, "db": -28.2, "peak": -24.2}
+{"t": "2026-10-28T19:14:43", "person": true, "motion": 0.464, "toss": false, "db": -27.2, "peak": -21.2}
+{"t": "2026-10-28T19:14:49", "person": true, "motion": 0.579, "toss": false, "db": -28.5, "peak": -23.1}
+{"t": "2026-10-28T19:14:54", "person": true, "motion": 0.075, "toss": false, "db": -29.0, "peak": -25.3}
+{"t": "2026-10-28T19:14:59", "person": true, "motion": 0.016, "toss": false, "db": -29.3, "peak": -26.4}
+{"t": "2026-10-28T19:15:04", "person": true, "motion": 0.178, "toss": false, "db": -28.6, "peak": -26.1}
+{"t": "2026-10-28T19:15:09", "person": true, "motion": 0.694, "toss": false, "db": -20.3, "peak": -6.7, "light": true}
+{"t": "2026-10-28T19:15:15", "person": true, "motion": 0.209, "toss": true, "db": -28.4, "peak": -23.0}
+{"t": "2026-10-28T19:15:20", "person": true, "motion": 0.386, "toss": false, "db": -27.6, "peak": -17.6}
+{"t": "2026-10-28T19:15:25", "person": true, "motion": 0.261, "toss": false, "db": -28.3, "peak": -23.0}
+{"t": "2026-10-28T19:15:30", "person": true, "motion": 0.04, "toss": false, "db": -28.1, "peak": -24.6}
+{"t": "2026-10-28T19:15:35", "person": true, "motion": 0.204, "toss": false, "db": -27.0, "peak": -20.9}
+{"t": "2026-10-28T19:15:41", "person": true, "motion": 0.26, "toss": false, "db": -20.8, "peak": -9.6}
+{"t": "2026-10-28T19:15:46", "person": true, "motion": 0.81, "toss": false, "db": -28.1, "peak": -23.5, "light": true}
+{"t": "2026-10-28T19:15:50", "stop": true}

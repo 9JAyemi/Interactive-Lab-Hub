@@ -9,10 +9,11 @@ morning Qwen tells you whether you moved more when the room was noisier.
     python sleep_watch.py --interval 10          # one look every 10 s instead of 5
     python sleep_watch.py --settle 300           # give yourself 5 minutes to fall asleep before counting
     python sleep_watch.py --morning              # skip the night, just report on the last sleep_log.jsonl
-    python sleep_watch.py --morning --say        # ...and read the report aloud with espeak
+    python sleep_watch.py --morning --say        # ...and read the report aloud (Piper voice from Lab 3)
+    python sleep_watch.py --tts en_US-hfc_female-medium   # another Piper voice (default: en_GB-jenny_dioco-medium)
     python sleep_watch.py --morning --log fake.jsonl   # report on another log
 
-Fake a night first: run it with --settle 5, toss around in view of the camera, clap a few
+The night starts counting 2 minutes after the hand-off (--settle). Fake a night first: run it with --settle 5, toss around in view of the camera, clap a few
 times, Ctrl-C, and check the report. Start the real night inside tmux (see Part H).
 
 How it decides things:
@@ -26,13 +27,16 @@ How it decides things:
   * The arithmetic (counts, noisy vs quiet, correlation) is done here in Python. Qwen only gets
     the finished numbers and writes the words, because a 0.8B model is bad at maths.
 
-Writes sleep_log.jsonl (one JSON object per line). No photos are saved.
+Writes sleep_log.jsonl (one JSON object per line) and, in the morning, a graph of the night
+next to it (sleep_YYYYMMDD-HHMM.png): movement on top, loudness below, with the three
+busiest moments shaded and labelled with how loud the room was then. No photos are saved.
 """
 import argparse
 import collections
 import datetime
 import json
 import math
+import pathlib
 import shutil
 import subprocess
 import threading
@@ -44,31 +48,67 @@ import requests
 
 # ---------------------------------------------------------------- talking to the person
 
+# Piper from Lab 3 (voices live in Lab 3/voices), a British English woman's voice by default.
+# Falls back to espeak-ng.
+LAB3 = pathlib.Path(__file__).resolve().parent.parent / "Lab 3"
+VOICE, SPEAKER = "en_GB-jenny_dioco-medium", 0     # --length-scale below sets the pace: under 1 is faster
+
+
 def say(text, enabled=True):
     print(f"[pi] {text}", flush=True)
-    if enabled and shutil.which("espeak-ng"):
+    if not enabled:
+        return
+    model = LAB3 / "voices" / f"{VOICE}.onnx"
+    if model.exists():
+        rate = json.load(open(f"{model}.json"))["audio"]["sample_rate"]
+        piper = subprocess.Popen([str(LAB3 / ".venv" / "bin" / "python"), "-m", "piper", "--model", VOICE,
+                                  "--data-dir", str(LAB3 / "voices"), "--speaker", str(SPEAKER),
+                                  "--length-scale", "0.85", "--output-raw", "--", text],
+                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        subprocess.run(["aplay", "-q", "-r", str(rate), "-f", "S16_LE", "-t", "raw", "-"],
+                       stdin=piper.stdout, stderr=subprocess.DEVNULL)
+        piper.wait()
+    elif shutil.which("espeak-ng"):
         subprocess.run(["espeak-ng", "-s", "140", text], stderr=subprocess.DEVNULL)
 
 
-def listen_once(seconds=5):
-    """Record one short sentence and transcribe it with faster-whisper (Lab 3). None if unavailable."""
+def listen_once(seconds=15, pause=1.5):
+    """Record one sentence and transcribe it with faster-whisper (Lab 3). None if unavailable.
+
+    Listens for up to `seconds`, and stops early once you have spoken and then been quiet for
+    `pause` seconds. Speech means 10 dB louder than the room sounded in the first half second.
+    """
     try:
         import sounddevice as sd
         from faster_whisper import WhisperModel
     except ImportError:
         print("faster-whisper is not installed in this venv: falling back to typing", flush=True)
         return None
-    print(f"listening for {seconds} s...", flush=True)
-    audio = sd.rec(int(seconds * 16000), samplerate=16000, channels=1, dtype="float32")
-    sd.wait()
-    segments, _ = WhisperModel("tiny.en", device="cpu", compute_type="int8").transcribe(audio[:, 0], beam_size=1)
+    print(f"listening (up to {seconds} s, stops when you pause)...", flush=True)
+    blocks, levels, spoke, quiet = [], [], False, 0.0
+    with sd.InputStream(samplerate=16000, channels=1, dtype="float32", blocksize=1600) as stream:
+        while len(blocks) < seconds * 10:                    # 0.1 s blocks
+            block, _ = stream.read(1600)
+            blocks.append(block[:, 0].copy())
+            levels.append(20 * math.log10(max(float(np.sqrt(np.mean(block ** 2))), 1e-6)))
+            if len(levels) <= 5:                             # the first half second is the room on its own
+                continue
+            if levels[-1] > np.median(levels[:5]) + 10:
+                spoke, quiet = True, 0.0
+            elif spoke:
+                quiet += 0.1
+                if quiet >= pause:
+                    break
+    audio = np.concatenate(blocks)
+    print(f"heard {len(audio) / 16000:.1f} s, transcribing...", flush=True)
+    segments, _ = WhisperModel("tiny.en", device="cpu", compute_type="int8").transcribe(audio, beam_size=1)
     return " ".join(s.text.strip() for s in segments).strip() or None
 
 
 def bedtime(args):
     """The hand-off: the person says what they want to know, the device acknowledges and dims."""
     say("Hi. What would you like me to watch tonight?", args.speak)
-    request = listen_once() if args.voice else None
+    request = listen_once(args.listen) if args.voice else None
     if request is None:
         request = input("(type it, or press Enter for the default) > ").strip()
     if not request:
@@ -176,8 +216,11 @@ def night(args, request):
             stop_at += datetime.timedelta(days=1)
         print(f"will stop at {stop_at:%a %H:%M}", flush=True)
 
-    time.sleep(args.settle)
-    meter.take()                                     # throw away the noise of getting into bed
+    for left in range(args.settle, 0, -1):          # 2 minutes by default, counted down on screen
+        if left % 30 == 0 or left <= 5:
+            print(f"starting in {left // 60}:{left % 60:02d}", flush=True)
+        time.sleep(1)
+    meter.take()                                   # throw away the noise of getting into bed
     print("watching, Ctrl-C to stop", flush=True)
     prev_gray, prev_box, last_toss, last_beat = None, None, 0.0, 0.0
     try:
@@ -296,15 +339,15 @@ def analyse(entries, noisy_margin):
         verdict = "tossed about the SAME whether it was noisy or quiet"
 
     loudest = max(heard, key=lambda e: e["peak"])
-    full_hours = [k for k, v in per_hour.items() if len(v["db"]) >= 10] or list(per_hour)   # skip a 1-look final hour
-    quiet_hour = min((k for k in full_hours if facts["per_hour"][k]["avg_db"] is not None),
-                     key=lambda k: facts["per_hour"][k]["avg_db"])
+    full = [k for k, v in bins.items() if len(v[0]) >= 0.5 * len(max(bins.values(), key=lambda v: len(v[0]))[0])]
+    quiet = min(full, key=lambda k: np.mean(bins[k][0]))      # the calmest 10 minutes (skip a cut-off last bin)
     facts.update({
         "sound": "dBFS, relative: about -60 is a silent room, -30 is talking nearby, 0 is the loudest the mic records",
         "night_avg_db": round(10 * math.log10(np.mean(10 ** (dbs / 10))), 1),
         "quiet_baseline_db": round(baseline, 1),
         "loudest_moment": f'{loudest["t"][11:16]} at {loudest["peak"]} dB',
-        "quietest_hour": quiet_hour,
+        "noisiest_time": loudest["t"][11:16],
+        "quietest_time": f"{quiet:%H:%M} to {quiet + datetime.timedelta(minutes=10):%H:%M}",
         "noisy_minutes": round(n_noisy * start.get("interval", 5) / 60),
         "tosses_per_100_noisy_looks": round(100 * r_noisy, 1) if r_noisy is not None else None,
         "tosses_per_100_quiet_looks": round(100 * r_quiet, 1) if r_quiet is not None else None,
@@ -318,10 +361,118 @@ def analyse(entries, noisy_margin):
     return facts
 
 
-def loudness_word(db):
-    if db is None:
-        return "unknown"
-    return "very quiet" if db < -55 else "quiet" if db < -45 else "moderate" if db < -35 else "loud"
+
+def plot_night(entries, facts, args):
+    """Save a picture of the night: movement and loudness as two overlapping lines on one chart.
+
+    The busiest moments of movement are shaded, so you can see whether the room was noisy
+    when you moved. Returns the path of the PNG.
+    """
+    import matplotlib
+    matplotlib.use("Agg")                            # no window needed, so it works over ssh
+    import matplotlib.dates as mdates
+    import matplotlib.pyplot as plt
+
+    BLUE, BLUE_DARK, ORANGE, ORANGE_DARK = "#2a78d6", "#184f95", "#eb6834", "#b8461c"
+    INK, MUTED, GRID, SURFACE = "#1a1a19", "#6b6a63", "#e6e5df", "#fcfcfb"
+
+    looks = [e for e in entries if "toss" in e]
+    times = [datetime.datetime.fromisoformat(e["t"]) for e in looks]
+    t0 = times[0]
+    interval = next((e for e in entries if e.get("start")), {}).get("interval", 5)
+    span = (times[-1] - t0).total_seconds()
+    step = 60 if span > 1800 else interval          # a real night: one point per minute; a fake one: every look
+
+    bins = collections.OrderedDict()                 # bin start -> motion values, loudness values, peaks
+    for t, e in zip(times, looks):
+        key = t0 + datetime.timedelta(seconds=(t - t0).total_seconds() // step * step)
+        b = bins.setdefault(key, {"motion": [], "db": [], "peak": [], "toss": 0})
+        b["motion"].append(100 * e["motion"])
+        b["toss"] += e["toss"]
+        if e.get("db") is not None:
+            b["db"].append(e["db"])
+            b["peak"].append(e["peak"])
+    bt = list(bins)
+    motion = [max(b["motion"]) for b in bins.values()]      # the biggest change in each bin
+    activity = [sum(b["motion"]) for b in bins.values()]     # how much moving there was in it overall
+    db = [10 * math.log10(np.mean([10 ** (d / 10) for d in b["db"]])) if b["db"] else np.nan for b in bins.values()]
+    peak = [max(b["peak"]) if b["peak"] else np.nan for b in bins.values()]
+
+    # The three busiest moments, at least 10 bins apart so they are three different episodes
+    busiest = []
+    for i in sorted(range(len(activity)), key=lambda i: -activity[i]):
+        if activity[i] <= 0 or len(busiest) == 3:
+            break
+        if all(abs(i - j) >= 10 for j in busiest):
+            busiest.append(i)
+    half = datetime.timedelta(seconds=max(step, span / 120))   # wide enough to see on an 8-hour axis
+
+    # One chart, two lines. Movement (% of the picture) and loudness (dB) have different units, so
+    # each is drawn on its own 0-100 scale: 0 is its lowest point of the night, 100 its highest.
+    def scale(values, lo=None, hi=None):
+        arr = np.array(values, dtype=float)
+        lo = np.nanmin(arr) if lo is None else lo
+        hi = np.nanmax(arr) if hi is None else hi
+        return (arr - lo) / (hi - lo) * 100 if hi > lo else arr * 0
+
+    fig, ax = plt.subplots(figsize=(11, 4.8), facecolor=SURFACE)
+    ax.set_facecolor(SURFACE)
+    ax.grid(axis="y", color=GRID, linewidth=0.8)
+    ax.set_axisbelow(True)
+    for side in ("top", "right", "left"):
+        ax.spines[side].set_visible(False)
+    ax.spines["bottom"].set_color(MUTED)
+    ax.tick_params(colors=MUTED, length=0, labelsize=9)
+    for i in busiest:
+        ax.axvspan(bt[i] - half, bt[i] + half, color="#efeee8", zorder=0)
+
+    heard = any(not np.isnan(p) for p in peak)
+    if heard:
+        # Noise: the loudest sound in each bin, so a door or a car shows up as a spike like a toss does
+        lo, hi = np.nanmin(peak), np.nanmax(peak)
+        threshold = facts["quiet_baseline_db"] + args.noisy_margin
+        ax.plot(bt, scale(peak, lo, hi), color=ORANGE, linewidth=1.5, alpha=0.9, zorder=2,
+                label=f"loudest sound ({lo:.0f} to {hi:.0f} dB)")
+        if lo < threshold < hi:
+            y = (threshold - lo) / (hi - lo) * 100
+            ax.axhline(y, color=ORANGE_DARK, linewidth=1, linestyle=(0, (4, 3)), zorder=1)
+            ax.text(bt[0], y, f" noisy above {threshold:.0f} dB", color=ORANGE_DARK, fontsize=8, va="bottom")
+    else:
+        ax.text(0.5, 0.92, "no microphone data", transform=ax.transAxes, ha="center", color=MUTED, fontsize=9)
+
+    # Movement on top of it, with each counted toss marked
+    mhi = max(motion) if max(motion) > 0 else 1
+    m = scale(motion, 0, mhi)
+    ax.plot(bt, m, color=BLUE, linewidth=2, zorder=3, label=f"movement (0 to {mhi:.0f}% of the picture changed)")
+    toss_bins = [i for i, b in enumerate(bins.values()) if b["toss"]]
+    ax.scatter([bt[i] for i in toss_bins], [m[i] for i in toss_bins], s=40, color=BLUE_DARK,
+               edgecolor=SURFACE, linewidth=1.5, zorder=4, label=f"counted toss ({facts['tosses']})")
+
+    # Label the busiest moments with how loud the room was right then
+    for rank, i in enumerate(busiest, 1):
+        noise = f", peak {peak[i]:.0f} dB" if not np.isnan(peak[i]) else ""
+        ax.annotate(f"#{rank} {bt[i]:%H:%M}{noise}", (bt[i], 100), xytext=(0, 6),
+                    textcoords="offset points", ha="center", fontsize=8, color=INK)
+
+    ax.set_ylim(0, 118)                              # headroom for the labels of the busiest moments
+    ax.set_yticks([0, 50, 100], ["lowest", "", "highest"])
+    ax.legend(loc="lower right", bbox_to_anchor=(1, 1), ncol=3, frameon=False, fontsize=9, labelcolor=INK)
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M" if span > 1800 else "%H:%M:%S"))
+    fig.suptitle(f"Night of {t0:%a %d %b}, {facts['from']} to {facts['to']}: {facts['tosses']} tosses, "
+                 f"{facts.get('verdict', 'no sound to compare')}",
+                 x=0.06, y=1.02, ha="left", color=INK, fontsize=12, fontweight="bold")
+    fig.text(0.06, 0.955, "Each line is scaled to its own range for the night. "
+             "Shaded: the three moments with the most movement, labelled with how loud the room was then",
+             color=MUTED, fontsize=9)
+    path = str(pathlib.Path(args.log).with_name(f"sleep_{t0:%Y%m%d-%H%M}.png"))
+    fig.savefig(path, dpi=120, bbox_inches="tight", facecolor=SURFACE)
+    plt.close(fig)
+    return path
+
+
+# What Qwen is told. The decibel numbers stay in the printout and the graph, out of the spoken report.
+TOLD = ("request", "from", "to", "hours", "tosses", "tosses_per_hour", "seen_in_bed_pct",
+        "noisiest_time", "quietest_time", "verdict", "comparison")
 
 
 def morning(args):
@@ -333,25 +484,25 @@ def morning(args):
     if facts is None:
         say("Good morning. I did not record anything last night, so I have nothing to report.", args.say)
         return
-    if "night_avg_db" in facts:
-        facts["overall_loudness"] = loudness_word(facts["night_avg_db"])
     print(json.dumps(facts, indent=2))
+    print(f"\ngraph of the night saved to {plot_night(entries, facts, args)}")
 
     if facts["tosses"] == 0 and facts["seen_in_bed_pct"] == 0:
         # honest about a night where the camera never saw anyone: do not let the model invent one
         say(f'Good morning. I watched from {facts["from"]} to {facts["to"]} but never saw you in bed, '
-            f'so I cannot say how you slept. The room was {facts.get("overall_loudness", "unmeasured")}.', args.say)
+            f'so I cannot say how you slept.' + (f' It was noisiest at {facts["noisiest_time"]} and quietest '
+            f'from {facts["quietest_time"]}.' if "noisiest_time" in facts else ""), args.say)
         return
 
     prompt = f"""You are a gentle bedside sleep device talking to someone who just woke up.
 Last night they asked you: "{facts['request']}"
 You watched them with a camera and listened to the room with a microphone. These are the measured facts:
 
-{json.dumps({k: v for k, v in facts.items() if k not in ("toss_times", "per_hour")}, indent=1)}
+{json.dumps({k: v for k, v in facts.items() if k in TOLD}, indent=1)}
 
 Write a short morning report of at most four sentences, speaking to them as "you":
 1. How many times they tossed and turned, and roughly how restless that is.
-2. How loud the night was overall, and the loudest moment.
+2. When the room was noisiest and when it was quietest (say the times; no decibel numbers).
 3. Answer their question using the verdict and the comparison sentence.
 Use only these facts and these numbers; do not guess the current time. Do not give medical advice."""
     print("\nasking Qwen...", flush=True)
@@ -381,12 +532,16 @@ if __name__ == "__main__":
     parser.add_argument("--noisy-margin", type=float, default=15,
                         help="dB above the night's quiet baseline that makes a moment noisy")
     parser.add_argument("--voice", action="store_true", help="speak the bedtime request instead of typing it")
+    parser.add_argument("--listen", type=float, default=15,
+                        help="with --voice: listen for up to this many seconds (stops early when you pause)")
     parser.add_argument("--quiet", dest="speak", action="store_false", help="no spoken acknowledgement at bedtime")
     parser.add_argument("--say", action="store_true", help="read the morning report aloud")
     parser.add_argument("--verbose", action="store_true", help="print every look, not only tosses")
     parser.add_argument("--model", default="qwen3.5:0.8b")
+    parser.add_argument("--tts", default=VOICE, help="Piper voice in Lab 3/voices (default: en_GB-jenny_dioco-medium, a British woman's voice)")
     parser.add_argument("--log", default="sleep_log.jsonl")
     args = parser.parse_args()
+    VOICE = args.tts
 
     if not args.morning:
         night(args, bedtime(args))

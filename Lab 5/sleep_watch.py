@@ -39,6 +39,7 @@ import math
 import pathlib
 import shutil
 import subprocess
+import sys
 import threading
 import time
 
@@ -158,6 +159,19 @@ class SoundMeter:
             self.stream.close()
 
 
+def brighten(frame, dark, gamma):
+    """Lift a dark frame with a gamma curve so YOLO and the motion check can see something.
+
+    Gamma lifts the shadows without stretching the sensor noise as much as a plain gain does
+    (measured on this webcam: a still dark room stays under 1% changed pixels). Frames that are
+    bright enough on average are left alone. Returns the frame and whether it was brightened.
+    """
+    if dark <= 0 or cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY).mean() >= dark:
+        return frame, False
+    lut = (255 * (np.arange(256) / 255) ** gamma).astype(np.uint8)
+    return cv2.LUT(frame, lut), True
+
+
 def find_person(model, frame):
     """The largest person box as (x1, y1, x2, y2), or None."""
     r = model.predict(frame, imgsz=320, conf=0.3, classes=[0], verbose=False)[0]   # lower conf: a sleeper is half hidden
@@ -231,7 +245,8 @@ def night(args, request):
                 ok, frame = cap.read()
                 if not ok:
                     raise RuntimeError("no frame")
-                gray = cv2.GaussianBlur(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (21, 21), 0)
+                frame, dark = brighten(frame, args.dark, args.gamma)
+                gray =cv2.GaussianBlur(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (21, 21), 0)
                 box = find_person(model, frame)
                 motion, toss, light = 0.0, False, False
                 if prev_gray is not None:
@@ -247,9 +262,12 @@ def night(args, request):
                          "db": db_avg, "peak": db_peak}
                 if light:
                     entry["light"] = True
+                if dark:
+                    entry["dark"] = True
                 write(entry)
                 if toss or args.verbose:
-                    print(f'{entry["t"][11:]} motion={motion:.3f} toss={toss} db={db_avg} peak={db_peak}', flush=True)
+                    print(f'{entry["t"][11:]} motion={motion:.3f} toss={toss} db={db_avg} peak={db_peak}'
+                          f'{" person" if box else ""}{" dark" if dark else ""}', flush=True)
                 if time.time() - last_beat > 600:
                     print(f'{entry["t"][11:]} still watching', flush=True)
                     last_beat = time.time()
@@ -529,6 +547,10 @@ if __name__ == "__main__":
     parser.add_argument("--motion", type=float, default=0.04,
                         help="fraction of the person's pixels that must change to count as a toss")
     parser.add_argument("--cooldown", type=float, default=30, help="tosses closer than this many seconds count once")
+    parser.add_argument("--dark", type=float, default=40,
+                        help="brighten frames whose average brightness (0-255) is below this; 0 turns it off")
+    parser.add_argument("--gamma", type=float, default=0.4,
+                        help="how hard to brighten dark frames: lower is brighter but noisier")
     parser.add_argument("--noisy-margin", type=float, default=15,
                         help="dB above the night's quiet baseline that makes a moment noisy")
     parser.add_argument("--voice", action="store_true", help="speak the bedtime request instead of typing it")
@@ -542,6 +564,7 @@ if __name__ == "__main__":
     parser.add_argument("--log", default="sleep_log.jsonl")
     args = parser.parse_args()
     VOICE = args.tts
+    sys.stdout.reconfigure(errors="replace")         # a latin-1 terminal (tmux) would crash on Qwen's dashes
 
     if not args.morning:
         night(args, bedtime(args))
